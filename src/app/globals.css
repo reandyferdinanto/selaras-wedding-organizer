@@ -200,8 +200,12 @@ select {
     -8px -8px 16px color-mix(in srgb, var(--shadow-light) 48%, transparent);
 }
 
-.home-motion-frame.theme-dark {
-  display: none;
+html:not([data-theme="dark"]) .home-motion-frame.theme-dark {
+  display: none !important;
+}
+
+html:not([data-theme="dark"]) .home-motion-frame.theme-light {
+  display: block !important;
 }
 
 html[data-theme="dark"] .home-motion-stage {
@@ -211,11 +215,11 @@ html[data-theme="dark"] .home-motion-stage {
 }
 
 html[data-theme="dark"] .home-motion-frame.theme-light {
-  display: none;
+  display: none !important;
 }
 
 html[data-theme="dark"] .home-motion-frame.theme-dark {
-  display: block;
+  display: block !important;
 }
 
 .home-motion-frame img {
