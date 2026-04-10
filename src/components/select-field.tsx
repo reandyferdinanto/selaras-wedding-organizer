@@ -16,6 +16,7 @@ type SelectFieldProps = {
   onChange: (value: string) => void;
   error?: string;
   touched?: boolean;
+  describedBy?: string;
 };
 
 export function SelectField({
@@ -26,11 +27,14 @@ export function SelectField({
   onChange,
   error,
   touched,
+  describedBy,
 }: SelectFieldProps) {
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const listboxId = useId();
+  const errorId = `${id}-error`;
+  const describedByIds = [describedBy, touched && error ? errorId : undefined].filter(Boolean).join(" ") || undefined;
   const selected = options.find((option) => option.value === value) ?? options[0];
 
   useEffect(() => {
@@ -72,6 +76,8 @@ export function SelectField({
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={listboxId}
+        aria-describedby={describedByIds}
+        data-invalid={touched && error ? "true" : undefined}
       >
         <span className="select-trigger-text">{selected?.label ?? "Pilih"}</span>
         <span className={["select-trigger-icon", open ? "is-open" : ""].filter(Boolean).join(" ")}>
@@ -107,7 +113,7 @@ export function SelectField({
         </div>
       ) : null}
 
-      {touched && error ? <p className="neo-field-error">{error}</p> : null}
+      {touched && error ? <p id={errorId} className="neo-field-error" role="alert">{error}</p> : null}
     </div>
   );
 }

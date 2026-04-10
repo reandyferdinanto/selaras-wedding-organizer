@@ -1,4 +1,4 @@
-﻿import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { cookies } from "next/headers";
 import Link from "next/link";
 
@@ -7,6 +7,13 @@ import { getOptionalDashboardAccess } from "@/lib/dashboard-access";
 import { signOutAction } from "@/lib/supabase/actions";
 
 import "./globals.css";
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  userScalable: true,
+};
 
 export const metadata: Metadata = {
   title: "Selaras Wedding Planner",

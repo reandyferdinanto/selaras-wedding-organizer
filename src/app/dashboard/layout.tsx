@@ -58,10 +58,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[15.25rem_minmax(0,1fr)] xl:grid-cols-[17rem_minmax(0,1fr)] xl:items-start">
-          <aside className="neo-panel dashboard-sidebar p-5 lg:sticky lg:top-5">
-            <p className="section-kicker">Menu utama</p>
+          <aside className="neo-panel dashboard-sidebar p-5 lg:sticky lg:top-5" aria-label="Progress utama dashboard">
+            <p className="section-kicker dashboard-sidebar-kicker">Menu utama</p>
             <h2 className="mt-2 text-2xl font-extrabold tracking-[-0.04em] text-slate-800">Urutan kerja yang disarankan</h2>
-            <div className="mt-5">
+            <div className="dashboard-nav-shell">
               <DashboardNav items={dashboardFeatures} states={states} />
             </div>
           </aside>

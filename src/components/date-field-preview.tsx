@@ -27,6 +27,7 @@ type DatePickerFieldProps = {
   onChange: (value: string) => void;
   error?: string;
   touched?: boolean;
+  describedBy?: string;
 };
 
 function isValidDate(date: Date) {
@@ -150,10 +151,13 @@ export function DatePickerField({
   onChange,
   error,
   touched,
+  describedBy,
 }: DatePickerFieldProps) {
   const [open, setOpen] = useState(false);
   const [viewDate, setViewDate] = useState(() => toDate(value) ?? new Date());
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const errorId = `${id}-error`;
+  const describedByIds = [describedBy, touched && error ? errorId : undefined].filter(Boolean).join(" ") || undefined;
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -192,6 +196,8 @@ export function DatePickerField({
         onClick={() => setOpen((current) => !current)}
         aria-expanded={open}
         aria-haspopup="dialog"
+        aria-describedby={describedByIds}
+        data-invalid={touched && error ? "true" : undefined}
       >
         <span className="date-input-icon">
           <Calendar size={16} />
@@ -257,7 +263,7 @@ export function DatePickerField({
         </div>
       ) : null}
 
-      {touched && error ? <p className="neo-field-error">{error}</p> : null}
+      {touched && error ? <p id={errorId} className="neo-field-error" role="alert">{error}</p> : null}
     </div>
   );
 }

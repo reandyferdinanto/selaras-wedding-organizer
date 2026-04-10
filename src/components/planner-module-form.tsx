@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useTransition } from "react";
 import { useFormik } from "formik";
 import * as Yup from "yup";
-import { ArrowLeft, ArrowRight, LayoutDashboard, Save } from "lucide-react";
+import { AlertCircle, ArrowLeft, ArrowRight, CheckCircle2, LayoutDashboard, Save } from "lucide-react";
 
 import { SelectField } from "@/components/select-field";
 import {
@@ -75,6 +75,45 @@ const validationSchemas: Record<PlannerModuleType, Yup.ObjectSchema<Record<strin
   }),
 };
 
+function ModuleProgressPanel({ completed, total }: { completed: number; total: number }) {
+  const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+  return (
+    <div className="form-progress-panel neo-panel-inset p-4" aria-label="Kemajuan pengisian modul">
+      <div className="form-progress-copy">
+        <span className="dashboard-status-chip is-sedang-disusun">{completed}/{total} field wajib terisi</span>
+        <div>
+          <p className="form-progress-title">Isi bagian inti dulu, detail lanjutan bisa menyusul.</p>
+          <p className="form-progress-text">Ringkasan di sisi kanan ikut berubah saat Anda mengetik.</p>
+        </div>
+      </div>
+      <div className="form-progress-track" aria-hidden="true">
+        <span className="form-progress-fill" style={{ width: `${percent}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function ModuleErrorSummary({ errors }: { errors: Array<{ id: string; label: string; message: string }> }) {
+  if (errors.length === 0) return null;
+
+  return (
+    <div className="form-error-summary" role="alert" aria-live="polite">
+      <div className="form-error-summary-heading">
+        <AlertCircle size={17} />
+        <p>Lengkapi {errors.length} field sebelum menyimpan.</p>
+      </div>
+      <ul>
+        {errors.map((error) => (
+          <li key={error.id}>
+            <a href={`#${error.id}`}>{error.label}: {error.message}</a>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export function PlannerModuleForm<T extends Record<string, string>>({
   moduleType,
   title,
@@ -112,6 +151,14 @@ export function PlannerModuleForm<T extends Record<string, string>>({
     const value = formik.values[field.name];
     return typeof value === "string" && value.trim().length > 0;
   }).length;
+  const visibleErrors: Array<{ id: string; label: string; message: string }> = [];
+  fields.forEach((field) => {
+    const message = formik.errors[field.name];
+    if (typeof message === "string") {
+      visibleErrors.push({ id: field.name, label: field.label, message });
+    }
+  });
+  const showErrorSummary = formik.submitCount > 0 && visibleErrors.length > 0;
 
   return (
     <div className="dashboard-detail-grid">
@@ -138,12 +185,21 @@ export function PlannerModuleForm<T extends Record<string, string>>({
           <p className="mt-2 text-sm leading-7 text-slate-500">Lengkapi bagian inti lebih dulu agar status langkah lebih cepat berubah dari belum diisi menjadi sedang disusun lalu selesai.</p>
         </div>
 
+        <div className="mt-5">
+          <ModuleProgressPanel completed={requiredFilledCount} total={requiredFields.length} />
+        </div>
+
         <form onSubmit={formik.handleSubmit} className="mt-6 space-y-4">
+          {showErrorSummary ? <ModuleErrorSummary errors={visibleErrors} /> : null}
+
           <div className="grid gap-4 lg:grid-cols-2">
             {fields.map((field) => {
               const error = formik.touched[field.name] && formik.errors[field.name];
               const isTextArea = field.type !== "select";
               const isFullWidth = isTextArea;
+              const hintId = `${field.name}-hint`;
+              const errorId = `${field.name}-error`;
+              const describedBy = typeof error === "string" ? `${hintId} ${errorId}` : hintId;
 
               return (
                 <div key={field.name} className={isFullWidth ? "lg:col-span-2" : ""}>
@@ -153,7 +209,7 @@ export function PlannerModuleForm<T extends Record<string, string>>({
                         <label className="neo-label !mb-0" htmlFor={field.name}>{field.label}</label>
                         {field.required ? <span className="field-required-badge">Wajib</span> : null}
                       </div>
-                      <p className="mb-3 text-sm leading-7 text-slate-500">{field.hint}</p>
+                      <p id={hintId} className="mb-3 text-sm leading-7 text-slate-500">{field.hint}</p>
                       <SelectField
                         id={field.name}
                         label=""
@@ -162,6 +218,7 @@ export function PlannerModuleForm<T extends Record<string, string>>({
                         onChange={(nextValue) => formik.setFieldValue(field.name, nextValue)}
                         error={typeof error === "string" ? error : undefined}
                         touched={Boolean(formik.touched[field.name])}
+                        describedBy={hintId}
                       />
                     </div>
                   ) : (
@@ -170,7 +227,7 @@ export function PlannerModuleForm<T extends Record<string, string>>({
                         <label className="neo-label !mb-0" htmlFor={field.name}>{field.label}</label>
                         {field.required ? <span className="field-required-badge">Wajib</span> : null}
                       </div>
-                      <p className="mb-3 text-sm leading-7 text-slate-500">{field.hint}</p>
+                      <p id={hintId} className="mb-3 text-sm leading-7 text-slate-500">{field.hint}</p>
                       <textarea
                         id={field.name}
                         name={field.name}
@@ -179,8 +236,10 @@ export function PlannerModuleForm<T extends Record<string, string>>({
                         value={formik.values[field.name]}
                         onChange={formik.handleChange}
                         onBlur={formik.handleBlur}
+                        aria-invalid={typeof error === "string"}
+                        aria-describedby={describedBy}
                       />
-                      {typeof error === "string" ? <p className="neo-field-error">{error}</p> : null}
+                      {typeof error === "string" ? <p id={errorId} className="neo-field-error" role="alert">{error}</p> : null}
                     </>
                   )}
                 </div>
@@ -193,6 +252,12 @@ export function PlannerModuleForm<T extends Record<string, string>>({
               <Save size={16} />
               {isPending ? "Menyimpan..." : "Simpan perubahan"}
             </button>
+            {requiredFilledCount === requiredFields.length ? (
+              <span className="form-complete-note">
+                <CheckCircle2 size={15} />
+                Semua field wajib siap disimpan.
+              </span>
+            ) : null}
           </div>
           {formik.status ? <p className="text-sm text-slate-500">{String(formik.status)}</p> : null}
         </form>

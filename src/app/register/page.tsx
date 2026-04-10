@@ -16,6 +16,28 @@ function pickParam(
   return Array.isArray(value) ? value[0] ?? fallback : value ?? fallback;
 }
 
+function RegisterIllustration() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="auth-illustration"
+      viewBox="0 0 360 260"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path d="M82 215H278" stroke="currentColor" strokeWidth="10" strokeLinecap="round" />
+      <path d="M105 215V83C105 66.4315 118.431 53 135 53H225C241.569 53 255 66.4315 255 83V215" stroke="currentColor" strokeWidth="10" strokeLinejoin="round" />
+      <path d="M135 112H225M135 148H184" stroke="currentColor" strokeWidth="9" strokeLinecap="round" />
+      <path d="M144 53V33M216 53V33" stroke="currentColor" strokeWidth="10" strokeLinecap="round" />
+      <path d="M132 33H228" stroke="currentColor" strokeWidth="10" strokeLinecap="round" />
+      <path d="M221 182H279" stroke="currentColor" strokeWidth="9" strokeLinecap="round" />
+      <path d="M250 153V211" stroke="currentColor" strokeWidth="9" strokeLinecap="round" />
+      <path d="M87 93C72 77 72 55 87 42C102 55 102 77 87 93Z" stroke="currentColor" strokeWidth="8" strokeLinejoin="round" />
+      <path d="M273 93C258 77 258 55 273 42C288 55 288 77 273 93Z" stroke="currentColor" strokeWidth="8" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 export default async function RegisterPage({
   searchParams,
 }: RegisterPageProps) {
@@ -66,6 +88,9 @@ export default async function RegisterPage({
           <h2 className="text-3xl font-extrabold tracking-[-0.04em] text-slate-800">
             Akun ini disiapkan untuk mulai mengatur rencana pernikahan secara bertahap.
           </h2>
+          <div className="auth-illustration-panel">
+            <RegisterIllustration />
+          </div>
           <div className="auth-note-stack">
             {[
               "Onboarding awal pasangan dan tanggal pernikahan.",

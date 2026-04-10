@@ -17,6 +17,26 @@ function pickParam(
   return Array.isArray(value) ? value[0] ?? fallback : value ?? fallback;
 }
 
+function LoginIllustration() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="auth-illustration"
+      viewBox="0 0 360 260"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path d="M76 218H284" stroke="currentColor" strokeWidth="10" strokeLinecap="round" />
+      <path d="M95 218V96C95 75 112 58 133 58H227C248 58 265 75 265 96V218" stroke="currentColor" strokeWidth="10" strokeLinejoin="round" />
+      <path d="M128 122H232M128 158H202" stroke="currentColor" strokeWidth="9" strokeLinecap="round" />
+      <path d="M180 58V38" stroke="currentColor" strokeWidth="10" strokeLinecap="round" />
+      <path d="M145 38H215" stroke="currentColor" strokeWidth="10" strokeLinecap="round" />
+      <path d="M236 193C251.464 193 264 180.464 264 165C264 149.536 251.464 137 236 137C220.536 137 208 149.536 208 165C208 180.464 220.536 193 236 193Z" stroke="currentColor" strokeWidth="9" />
+      <path d="M236 163V151M236 163L245 172" stroke="currentColor" strokeWidth="8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const params = (await searchParams) ?? {};
   const message = pickParam(params.message);
@@ -37,6 +57,10 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             <p className="mt-4 max-w-xl text-base leading-8 text-slate-600">
               Semua rencana acara, catatan vendor, dan daftar tugas keluarga akan lebih mudah dipantau dari satu tempat.
             </p>
+          </div>
+
+          <div className="auth-illustration-panel mt-8">
+            <LoginIllustration />
           </div>
 
           <div className="auth-note-stack mt-10">

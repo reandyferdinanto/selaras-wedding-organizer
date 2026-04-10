@@ -1,13 +1,20 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition, useCallback } from "react";
 import { useFormik } from "formik";
 import * as Yup from "yup";
-import { ArrowLeft, ArrowRight, LayoutDashboard, Plus, Save, Trash2, Download, FileSpreadsheet } from "lucide-react";
+import { ArrowLeft, ArrowRight, LayoutDashboard, Plus, Save, Trash2, Download, FileSpreadsheet, Check } from "lucide-react";
 import { exportVendorToExcel, exportVendorToPdf } from "@/lib/export-utils";
+
+// ─── Mobile wizard steps ──────────────────────────────────────────────────────
+const FORM_STEPS = [
+  { id: "info",      label: "Informasi",  shortLabel: "Info",    icon: "A" },
+  { id: "checklist", label: "Rekonsiliasi", shortLabel: "Paket",  icon: "B" },
+  { id: "tambahan",  label: "Tambahan",   shortLabel: "Tambahan", icon: "C" },
+] as const;
+type FormStepId = (typeof FORM_STEPS)[number]["id"];
 
 
 import { serializeVendorModule, type VendorModule } from "@/lib/planner-modules";
@@ -137,6 +144,21 @@ const STATUS_CONFIG: Record<ItemStatus, { label: string; class: string; shortLab
   exclude: { label: "Tidak termasuk", shortLabel: "Tidak termasuk", class: "vsi-exclude" },
   tbd: { label: "Belum dikonfirmasi", shortLabel: "Belum konfirmasi", class: "vsi-tbd" },
 };
+
+const VENDOR_GROUP_STEPS = [
+  {
+    key: "Lamaran",
+    title: "Grup Lamaran",
+    helper: "Cek vendor dan komponen untuk lamaran atau pertunangan.",
+  },
+  {
+    key: "Akad & Resepsi",
+    title: "Grup Akad & Resepsi",
+    helper: "Lanjutkan ke vendor untuk akad, resepsi, dan kebutuhan hari utama.",
+  },
+] as const;
+
+type VendorGroupKey = (typeof VENDOR_GROUP_STEPS)[number]["key"];
 
 // ─── Status toggle button ─────────────────────────────────────────────────────
 
@@ -353,11 +375,11 @@ function VendorChecklistCard({
               </div>
             )}
             {item.imageUrl && (
-              <div className="mt-2 relative inline-flex group border border-slate-200 rounded-md p-1 shadow-sm bg-white ml-6">
-                <img src={item.imageUrl} alt="Referensi" className="h-16 w-auto object-cover rounded" />
+              <div className="vscard-image-preview group">
+                <img src={item.imageUrl} alt="Referensi" className="vscard-image-thumb" />
                 <button
                   type="button"
-                  className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="vscard-image-remove"
                   onClick={() => onImageUpload(index, ii, undefined)}
                   title="Hapus gambar"
                 >
@@ -592,6 +614,50 @@ function SummaryOutputPanel({
   );
 }
 
+// ─── Mobile step timeline ─────────────────────────────────────────────────────
+
+function MobileStepTimeline({
+  steps,
+  activeStep,
+  completedSteps,
+  onStepClick,
+}: {
+  steps: typeof FORM_STEPS;
+  activeStep: FormStepId;
+  completedSteps: Set<FormStepId>;
+  onStepClick: (id: FormStepId) => void;
+}) {
+  return (
+    <div className="vs-mobile-timeline" role="tablist" aria-label="Langkah pengisian vendor">
+      {steps.map((step, idx) => {
+        const isActive = step.id === activeStep;
+        const isDone = completedSteps.has(step.id);
+        return (
+          <button
+            key={step.id}
+            type="button"
+            role="tab"
+            aria-selected={isActive}
+            aria-controls={`vs-step-panel-${step.id}`}
+            className={[
+              "vs-mstep",
+              isActive ? "is-active" : "",
+              isDone ? "is-done" : "",
+            ].filter(Boolean).join(" ")}
+            onClick={() => onStepClick(step.id)}
+          >
+            <span className="vs-mstep-circle">
+              {isDone && !isActive ? <Check size={11} strokeWidth={3} /> : step.icon}
+            </span>
+            <span className="vs-mstep-label">{step.shortLabel}</span>
+            {idx < steps.length - 1 && <span className="vs-mstep-line" aria-hidden />}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── Main form ────────────────────────────────────────────────────────────────
 
 export function VendorModuleForm({
@@ -607,6 +673,17 @@ export function VendorModuleForm({
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [activeVendorGroup, setActiveVendorGroup] = useState<VendorGroupKey>("Lamaran");
+  const [mobileStep, setMobileStep] = useState<FormStepId>("info");
+  const [completedSteps, setCompletedSteps] = useState<Set<FormStepId>>(new Set());
+
+  const goToStep = useCallback((id: FormStepId) => {
+    setMobileStep((prev) => {
+      setCompletedSteps((s) => { const n = new Set(s); n.add(prev); return n; });
+      return id;
+    });
+  }, []);
+
 
   const formik = useFormik<VendorPlannerState & { customCategoryTitle: string; customCategoryItems: string }>({
     enableReinitialize: true,
@@ -644,6 +721,14 @@ export function VendorModuleForm({
   });
 
   const stats = getVendorChecklistStats(formik.values.categories);
+  const activeGroupIndex = VENDOR_GROUP_STEPS.findIndex((step) => step.key === activeVendorGroup);
+  const activeGroupStep = VENDOR_GROUP_STEPS[activeGroupIndex] ?? VENDOR_GROUP_STEPS[0];
+  const activeGroupCategories = formik.values.categories.filter((category) => category.group === activeVendorGroup);
+  const activeGroupTotalItems = activeGroupCategories.reduce((sum, category) => sum + category.items.length, 0);
+  const activeGroupConfirmedItems = activeGroupCategories.reduce(
+    (sum, category) => sum + category.items.filter((item) => item.status !== "tbd").length,
+    0,
+  );
   const coreFilledCount = [formik.values.vendorLamaranName, formik.values.vendorAkadResepsiName]
     .filter((v) => v?.trim().length > 0).length;
 
@@ -672,8 +757,8 @@ export function VendorModuleForm({
               Hasilnya otomatis menjadi checklist keluarga, tugas koordinator, dan dasar perhitungan budget.
             </p>
 
-            {/* Legend */}
-            <div className="vs-legend mt-4">
+            {/* Legend – hide on mobile to save space */}
+            <div className="vs-legend mt-4 hidden md:grid">
               <div className="vs-legend-item">
                 <span className="vs-legend-dot is-include" />
                 <span>Termasuk paket → Keluarga tahu, vendor tangani</span>
@@ -688,40 +773,40 @@ export function VendorModuleForm({
               </div>
             </div>
           </div>
-          <div className="vendor-v2-hero-img">
-            <Image
-              src="/vendor-illustration.png"
-              alt="Ilustrasi vendor pernikahan"
-              width={180}
-              height={180}
-              className="vendor-v2-illustration"
-              priority
-            />
-          </div>
         </div>
 
-        {/* Top bar */}
-        <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+        {/* Mobile/tablet: step timeline */}
+        <div className="vs-mobile-timeline-wrap">
+          <MobileStepTimeline
+            steps={FORM_STEPS}
+            activeStep={mobileStep}
+            completedSteps={completedSteps}
+            onStepClick={goToStep}
+          />
+        </div>
+
+        {/* Top bar – global stats summary (compact on mobile) */}
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap gap-2 items-center">
             <span className="vs-global-stat is-include">{stats.included} termasuk</span>
             <span className="vs-global-stat is-exclude">{stats.excluded} tidak termasuk</span>
             <span className="vs-global-stat is-tbd">{stats.tbdItems} belum konfirmasi</span>
           </div>
-          <Link href="/dashboard" className="neo-button-secondary responsive-action whitespace-nowrap">
+          <Link href="/dashboard" className="neo-button-secondary responsive-action whitespace-nowrap hidden md:inline-flex">
             <LayoutDashboard size={16} />
             Ringkasan
           </Link>
         </div>
 
-        <form onSubmit={formik.handleSubmit} className="mt-6 space-y-6">
+        <form onSubmit={formik.handleSubmit} className="mt-5 space-y-6">
 
           {/* ── A: Context notes ── */}
-          <div>
+          <div className={mobileStep !== "info" ? "vs-step-hidden" : ""} id="vs-step-panel-info" role="tabpanel">
             <div className="vendor-v2-section-header">
-              <div className="vendor-v2-section-pill">A</div>
+              <div className="vendor-v2-section-pill vs-step-pill-active">A</div>
               <div>
-                <h2 className="vendor-v2-section-title">Konteks pilihan vendor</h2>
-                <p className="vendor-v2-section-sub">Tuliskan nama vendor utama atau gambaran paket untuk masing-masing acara.</p>
+                <h2 className="vendor-v2-section-title">Informasi vendor utama</h2>
+                <p className="vendor-v2-section-sub">Isi data kontak vendor terlebih dahulu, lalu lanjutkan cek kelengkapan paket per grup.</p>
               </div>
             </div>
 
@@ -733,15 +818,15 @@ export function VendorModuleForm({
                 <div className="vs-ctx-field-meta">
                   <div className="vs-ctx-field-num">1</div>
                   <div className="vs-ctx-field-info">
-                    <label className="vs-ctx-label" htmlFor="vendorLamaranName">Grup Lamaran & Pertunangan</label>
-                    <p className="vs-ctx-hint">Nama vendor utama atau keterangan (misal: "Sewa backdrop sendiri")</p>
+                    <label className="vs-ctx-label" htmlFor="vendorLamaranName">Vendor lamaran</label>
+                    <p className="vs-ctx-hint">Nama vendor, paket, atau keterangan jika kebutuhan lamaran ditangani sendiri.</p>
                   </div>
                 </div>
-                <div className="vs-ctx-field-input space-y-3">
+                <div className="vs-ctx-field-input vs-vendor-info-grid">
                   <input
                     id="vendorLamaranName" name="vendorLamaranName"
                     className="neo-input"
-                    placeholder="Contoh: Vendor XYZ atau Belum Tentu"
+                    placeholder="Nama vendor / paket lamaran"
                     value={formik.values.vendorLamaranName}
                     onChange={formik.handleChange}
                     onBlur={formik.handleBlur}
@@ -749,8 +834,8 @@ export function VendorModuleForm({
                   <textarea
                     id="vendorLamaranNote" name="vendorLamaranNote"
                     className="neo-input neo-scrollbar resize-none"
-                    style={{ minHeight: "4rem" }}
-                    placeholder="Catatan tambahan (opsional)..."
+                    style={{ minHeight: "7.5rem" }}
+                    placeholder={"Alamat office:\nTelp office:\nPIC vendor:\nCatatan paket / termin:"}
                     value={formik.values.vendorLamaranNote}
                     onChange={formik.handleChange}
                   />
@@ -764,15 +849,15 @@ export function VendorModuleForm({
                 <div className="vs-ctx-field-meta">
                   <div className="vs-ctx-field-num">2</div>
                   <div className="vs-ctx-field-info">
-                    <label className="vs-ctx-label" htmlFor="vendorAkadResepsiName">Grup Akad & Resepsi</label>
-                    <p className="vs-ctx-hint">Bisa diisi vendor all-in, atau jika terpisah tulis ringkasannya (Misal: "Akad: MUA A, Resepsi: MUA B")</p>
+                    <label className="vs-ctx-label" htmlFor="vendorAkadResepsiName">Vendor akad & resepsi</label>
+                    <p className="vs-ctx-hint">Isi vendor all-in atau ringkasan vendor utama untuk acara hari-H.</p>
                   </div>
                 </div>
-                <div className="vs-ctx-field-input space-y-3">
+                <div className="vs-ctx-field-input vs-vendor-info-grid">
                   <input
                     id="vendorAkadResepsiName" name="vendorAkadResepsiName"
                     className="neo-input"
-                    placeholder="Contoh: All-in Package Gedung ABC"
+                    placeholder="Nama vendor / paket akad & resepsi"
                     value={formik.values.vendorAkadResepsiName}
                     onChange={formik.handleChange}
                     onBlur={formik.handleBlur}
@@ -780,8 +865,8 @@ export function VendorModuleForm({
                   <textarea
                     id="vendorAkadResepsiNote" name="vendorAkadResepsiNote"
                     className="neo-input neo-scrollbar resize-none"
-                    style={{ minHeight: "4.5rem" }}
-                    placeholder="Catatan: MUA dan Busana sudah termasuk, foto terpisah..."
+                    style={{ minHeight: "7.5rem" }}
+                    placeholder={"Alamat office:\nTelp office:\nPIC vendor:\nCatatan paket / termin:"}
                     value={formik.values.vendorAkadResepsiNote}
                     onChange={formik.handleChange}
                   />
@@ -789,10 +874,22 @@ export function VendorModuleForm({
               </div>
 
             </div>
+
+            {/* Mobile: Next step button */}
+            <div className="vs-step-nav-bottom">
+              <button
+                type="button"
+                className="neo-button-primary w-full justify-center"
+                onClick={() => goToStep("checklist")}
+              >
+                Lanjut ke Rekonsiliasi Paket
+                <ArrowRight size={15} />
+              </button>
+            </div>
           </div>
 
           {/* ── B: Checklist per kategori ── */}
-          <div>
+          <div className={mobileStep !== "checklist" ? "vs-step-hidden" : ""} id="vs-step-panel-checklist" role="tabpanel">
             <div className="vendor-v2-section-header">
               <div className="vendor-v2-section-pill">B</div>
               <div className="flex-1 min-w-0">
@@ -807,11 +904,44 @@ export function VendorModuleForm({
               </div>
             </div>
 
-            <div className="vs-card-list mt-4">
-              <div className="mb-4">
-                <h3 className="text-lg font-bold text-slate-800 mb-2 border-b pb-2">Grup Lamaran</h3>
+            <div className="vs-group-flow mt-4">
+              <div className="vs-group-stepper" aria-label="Urutan grup vendor">
+                {VENDOR_GROUP_STEPS.map((step, index) => {
+                  const isActive = step.key === activeVendorGroup;
+                  const isDone = index < activeGroupIndex;
+
+                  return (
+                    <button
+                      key={step.key}
+                      type="button"
+                      className={["vs-group-step", isActive ? "is-active" : "", isDone ? "is-done" : ""].filter(Boolean).join(" ")}
+                      onClick={() => setActiveVendorGroup(step.key)}
+                      aria-current={isActive ? "step" : undefined}
+                    >
+                      <span className="vs-group-step-number">{index + 1}</span>
+                      <span className="vs-group-step-copy">
+                        <span className="vs-group-step-title">{step.title}</span>
+                        <span className="vs-group-step-helper">{step.helper}</span>
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
-              {formik.values.categories.filter((c) => c.group === "Lamaran").map((category) => {
+
+              <div className="vs-group-current">
+                <div>
+                  <p className="section-kicker">Sedang diedit</p>
+                  <h3 className="vs-group-current-title">{activeGroupStep.title}</h3>
+                  <p className="vs-group-current-copy">{activeGroupStep.helper}</p>
+                </div>
+                <div className="vs-group-current-stat">
+                  <span>{activeGroupConfirmedItems}</span>
+                  <small>/{activeGroupTotalItems} terkonfirmasi</small>
+                </div>
+              </div>
+
+              <div className="vs-card-list">
+              {activeGroupCategories.map((category) => {
                 const ci = formik.values.categories.findIndex(c => c.id === category.id);
                 return (
                   <VendorChecklistCard
@@ -845,48 +975,53 @@ export function VendorModuleForm({
                   />
                 )
               })}
-
-              <div className="mt-8 mb-4">
-                <h3 className="text-lg font-bold text-slate-800 mb-2 border-b pb-2">Grup Akad & Resepsi</h3>
               </div>
-              {formik.values.categories.filter((c) => c.group === "Akad & Resepsi").map((category) => {
-                const ci = formik.values.categories.findIndex(c => c.id === category.id);
-                return (
-                  <VendorChecklistCard
-                    key={category.id}
-                    category={category}
-                    index={ci}
-                    onStatusChange={(ci, ii, status) => {
-                      formik.setFieldValue(`categories.${ci}.items.${ii}.status`, status);
-                    }}
-                  onItemNoteChange={(ci, ii, note) => {
-                    formik.setFieldValue(`categories.${ci}.items.${ii}.note`, note);
-                  }}
-                  onImageUpload={(ci, ii, base64) => {
-                    formik.setFieldValue(`categories.${ci}.items.${ii}.imageUrl`, base64);
-                  }}
-                  onVendorNameChange={(ci, name) => {
-                    formik.setFieldValue(`categories.${ci}.vendorName`, name);
-                  }}
-                  onAddItem={(ci, label) => {
-                    const newItems = [...category.items, { label, status: "tbd", note: "" } as const];
-                    formik.setFieldValue(`categories.${ci}.items`, newItems);
-                  }}
-                  onRemoveItem={(ci, ii) => {
-                    const newItems = category.items.filter((_, idx) => idx !== ii);
-                    formik.setFieldValue(`categories.${ci}.items`, newItems);
-                  }}
-                  onRemove={category.isCustom ? (ci) => {
-                    formik.setFieldValue("categories", formik.values.categories.filter((_, idx) => idx !== ci));
-                  } : undefined}
-                />
-                )
-              })}
+
+              <div className="vs-group-pager">
+                <button
+                  type="button"
+                  className="neo-button-secondary"
+                  onClick={() => setActiveVendorGroup("Lamaran")}
+                  disabled={activeVendorGroup === "Lamaran"}
+                >
+                  <ArrowLeft size={15} />
+                  Grup sebelumnya
+                </button>
+                <button
+                  type="button"
+                  className="neo-button-primary"
+                  onClick={() => setActiveVendorGroup("Akad & Resepsi")}
+                  disabled={activeVendorGroup === "Akad & Resepsi"}
+                >
+                  Grup berikutnya
+                  <ArrowRight size={15} />
+                </button>
+              </div>
+            </div>
+
+            {/* Mobile: step navigation buttons */}
+            <div className="vs-step-nav-bottom">
+              <button
+                type="button"
+                className="neo-button-secondary flex-1 justify-center"
+                onClick={() => goToStep("info")}
+              >
+                <ArrowLeft size={15} />
+                Kembali ke Info
+              </button>
+              <button
+                type="button"
+                className="neo-button-primary flex-1 justify-center"
+                onClick={() => goToStep("tambahan")}
+              >
+                Lanjut ke Tambahan
+                <ArrowRight size={15} />
+              </button>
             </div>
           </div>
 
           {/* ── C + D: Tambah kategori & Catatan umum ── */}
-          <div>
+          <div className={mobileStep !== "tambahan" ? "vs-step-hidden" : ""} id="vs-step-panel-tambahan" role="tabpanel">
             <div className="vendor-v2-section-header">
               <div className="vendor-v2-section-pill">C</div>
               <div className="flex-1">
@@ -990,15 +1125,33 @@ export function VendorModuleForm({
               </div>
 
             </div>
+
+            {/* Mobile: back + save nav */}
+            <div className="vs-step-nav-bottom">
+              <button
+                type="button"
+                className="neo-button-secondary flex-1 justify-center"
+                onClick={() => goToStep("checklist")}
+              >
+                <ArrowLeft size={15} />
+                Kembali
+              </button>
+              <button type="submit" className="neo-button-primary flex-1 justify-center" disabled={isPending}>
+                <Save size={16} />
+                {isPending ? "Menyimpan..." : "Simpan"}
+              </button>
+            </div>
           </div>
 
-          <div className="editor-actions">
+          {/* Desktop save button */}
+          <div className="editor-actions hidden md:flex">
             <button type="submit" className="neo-button-primary responsive-action" disabled={isPending}>
               <Save size={16} />
               {isPending ? "Menyimpan..." : "Simpan rekonsiliasi"}
             </button>
           </div>
           {formik.status ? <p className="mt-2 text-sm" style={{ color: "var(--text-soft)" }}>{String(formik.status)}</p> : null}
+
         </form>
       </article>
 

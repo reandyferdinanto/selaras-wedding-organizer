@@ -3,7 +3,7 @@
 import { useSyncExternalStore, useTransition, useState, type ReactNode } from "react";
 import { useFormik } from "formik";
 import * as Yup from "yup";
-import { CalendarDays, HeartHandshake, MapPin, Pencil, Sparkles, Users, WandSparkles } from "lucide-react";
+import { AlertCircle, CalendarDays, CheckCircle2, HeartHandshake, MapPin, Pencil, Sparkles, Users, WandSparkles } from "lucide-react";
 
 import { DatePickerField } from "@/components/date-field-preview";
 import { SelectField } from "@/components/select-field";
@@ -62,11 +62,90 @@ const projectSchema = Yup.object({
   concept: Yup.string().min(10, "Gambaran acara minimal 10 karakter.").required("Gambaran acara wajib diisi."),
 });
 
+const projectRequiredFields = [
+  "brideName",
+  "groomName",
+  "weddingDate",
+  "city",
+  "venue",
+  "guestCount",
+  "template",
+  "concept",
+] as const;
+
+const projectFieldLabels: Record<(typeof projectRequiredFields)[number], string> = {
+  brideName: "Nama mempelai wanita",
+  groomName: "Nama mempelai pria",
+  weddingDate: "Tanggal pernikahan",
+  city: "Kota acara",
+  venue: "Venue atau lokasi acara",
+  guestCount: "Perkiraan tamu",
+  template: "Gaya acara",
+  concept: "Gambaran singkat acara",
+};
+
+function fieldFilled(value: string) {
+  return value.trim().length > 0;
+}
+
 function RequiredLabel({ htmlFor, children }: { htmlFor: string; children: string }) {
   return (
     <div className="mb-3 flex flex-wrap items-center gap-2">
       <label className="neo-label !mb-0" htmlFor={htmlFor}>{children}</label>
       <span className="field-required-badge">Wajib</span>
+    </div>
+  );
+}
+
+function FormProgressPanel({ completed, total }: { completed: number; total: number }) {
+  const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+  return (
+    <div className="form-progress-panel neo-panel-inset p-4" aria-label="Kemajuan pengisian form">
+      <div className="form-progress-copy">
+        <span className="dashboard-status-chip is-sedang-disusun">{completed}/{total} field wajib terisi</span>
+        <div>
+          <p className="form-progress-title">Mulai dari data inti, lalu cek ringkasan sebelum disimpan.</p>
+          <p className="form-progress-text">Field yang sudah terisi langsung dihitung agar arah pengisian lebih jelas.</p>
+        </div>
+      </div>
+      <div className="form-progress-track" aria-hidden="true">
+        <span className="form-progress-fill" style={{ width: `${percent}%` }} />
+      </div>
+      <ol className="form-step-list">
+        <li className={completed >= 3 ? "is-done" : "is-current"}>
+          <CheckCircle2 size={15} />
+          Data pasangan
+        </li>
+        <li className={completed >= 7 ? "is-done" : completed >= 3 ? "is-current" : ""}>
+          <MapPin size={15} />
+          Lokasi dan tamu
+        </li>
+        <li className={completed === total ? "is-done" : completed >= 7 ? "is-current" : ""}>
+          <Sparkles size={15} />
+          Konsep acara
+        </li>
+      </ol>
+    </div>
+  );
+}
+
+function FormErrorSummary({ errors }: { errors: Array<{ id: string; label: string; message: string }> }) {
+  if (errors.length === 0) return null;
+
+  return (
+    <div className="form-error-summary" role="alert" aria-live="polite">
+      <div className="form-error-summary-heading">
+        <AlertCircle size={17} />
+        <p>Lengkapi {errors.length} field sebelum menyimpan.</p>
+      </div>
+      <ul>
+        {errors.map((error) => (
+          <li key={error.id}>
+            <a href={`#${error.id}`}>{error.label}: {error.message}</a>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -148,6 +227,15 @@ export function ProjectSetupForm({ initialValues }: { initialValues: ProjectSetu
   });
 
   const couple = [formik.values.brideName, formik.values.groomName].filter(Boolean).join(" & ") || "Nama pasangan belum diisi";
+  const completedRequiredCount = projectRequiredFields.filter((field) => fieldFilled(String(formik.values[field] ?? ""))).length;
+  const visibleErrors: Array<{ id: string; label: string; message: string }> = [];
+  projectRequiredFields.forEach((field) => {
+    const message = formik.errors[field];
+    if (typeof message === "string") {
+      visibleErrors.push({ id: field, label: projectFieldLabels[field], message });
+    }
+  });
+  const showErrorSummary = formik.submitCount > 0 && visibleErrors.length > 0;
 
   if (!isReady) {
     return <ProjectSetupFormSkeleton />;
@@ -235,19 +323,25 @@ export function ProjectSetupForm({ initialValues }: { initialValues: ProjectSetu
           <p className="mt-2 text-sm leading-7 text-slate-500">Nama pasangan, tanggal, kota, venue, jumlah tamu, template acara, dan gambaran konsep akan dipakai oleh seluruh ringkasan dashboard.</p>
         </div>
 
+        <div className="mt-5">
+          <FormProgressPanel completed={completedRequiredCount} total={projectRequiredFields.length} />
+        </div>
+
         <form onSubmit={formik.handleSubmit} className="mt-6 space-y-5" autoComplete="off">
+          {showErrorSummary ? <FormErrorSummary errors={visibleErrors} /> : null}
+
           <section className="neo-panel-inset project-stage-section p-4 sm:p-5">
             <SectionHeader icon={<HeartHandshake size={18} />} title="Data pasangan" description="Isi nama kedua mempelai sebagai identitas utama acara." />
             <div className="project-stage-form-grid project-stage-section-grid mt-5">
               <div className="form-field-stack project-stage-span-6">
                 <RequiredLabel htmlFor="brideName">Nama mempelai wanita</RequiredLabel>
-                <input id="brideName" name="brideName" className="neo-input" value={formik.values.brideName} onChange={formik.handleChange} onBlur={formik.handleBlur} placeholder="Tulis nama mempelai wanita" autoComplete="off" data-lpignore="true" />
-                {formik.touched.brideName && formik.errors.brideName ? <p className="neo-field-error">{formik.errors.brideName}</p> : null}
+                <input id="brideName" name="brideName" className="neo-input" value={formik.values.brideName} onChange={formik.handleChange} onBlur={formik.handleBlur} placeholder="Tulis nama mempelai wanita" autoComplete="given-name" aria-invalid={Boolean(formik.touched.brideName && formik.errors.brideName)} aria-describedby={formik.touched.brideName && formik.errors.brideName ? "brideName-error" : undefined} data-lpignore="true" />
+                {formik.touched.brideName && formik.errors.brideName ? <p id="brideName-error" className="neo-field-error" role="alert">{formik.errors.brideName}</p> : null}
               </div>
               <div className="form-field-stack project-stage-span-6">
                 <RequiredLabel htmlFor="groomName">Nama mempelai pria</RequiredLabel>
-                <input id="groomName" name="groomName" className="neo-input" value={formik.values.groomName} onChange={formik.handleChange} onBlur={formik.handleBlur} placeholder="Tulis nama mempelai pria" autoComplete="off" data-lpignore="true" />
-                {formik.touched.groomName && formik.errors.groomName ? <p className="neo-field-error">{formik.errors.groomName}</p> : null}
+                <input id="groomName" name="groomName" className="neo-input" value={formik.values.groomName} onChange={formik.handleChange} onBlur={formik.handleBlur} placeholder="Tulis nama mempelai pria" autoComplete="given-name" aria-invalid={Boolean(formik.touched.groomName && formik.errors.groomName)} aria-describedby={formik.touched.groomName && formik.errors.groomName ? "groomName-error" : undefined} data-lpignore="true" />
+                {formik.touched.groomName && formik.errors.groomName ? <p id="groomName-error" className="neo-field-error" role="alert">{formik.errors.groomName}</p> : null}
               </div>
               <div className="form-field-stack project-stage-span-12">
                 <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -271,8 +365,8 @@ export function ProjectSetupForm({ initialValues }: { initialValues: ProjectSetu
               </div>
               <div className="form-field-stack project-stage-span-8">
                 <RequiredLabel htmlFor="venue">Venue atau lokasi acara</RequiredLabel>
-                <input id="venue" name="venue" className="neo-input" value={formik.values.venue} onChange={formik.handleChange} onBlur={formik.handleBlur} placeholder="Contoh: Ballroom hotel, gedung, rumah, atau venue outdoor" autoComplete="off" data-lpignore="true" />
-                <p className="form-help-text">Pilih saran cepat atau isi manual sesuai lokasi acara Anda.</p>
+                <input id="venue" name="venue" className="neo-input" value={formik.values.venue} onChange={formik.handleChange} onBlur={formik.handleBlur} placeholder="Contoh: Ballroom hotel, gedung, rumah, atau venue outdoor" autoComplete="organization" aria-invalid={Boolean(formik.touched.venue && formik.errors.venue)} aria-describedby={formik.touched.venue && formik.errors.venue ? "venue-help venue-error" : "venue-help"} data-lpignore="true" />
+                <p id="venue-help" className="form-help-text">Pilih saran cepat atau isi manual sesuai lokasi acara Anda.</p>
                 <div className="preset-chip-group">
                   {venueSuggestions.map((suggestion) => (
                     <button
@@ -285,7 +379,7 @@ export function ProjectSetupForm({ initialValues }: { initialValues: ProjectSetu
                     </button>
                   ))}
                 </div>
-                {formik.touched.venue && formik.errors.venue ? <p className="neo-field-error">{formik.errors.venue}</p> : null}
+                {formik.touched.venue && formik.errors.venue ? <p id="venue-error" className="neo-field-error" role="alert">{formik.errors.venue}</p> : null}
               </div>
               <div className="form-field-stack project-stage-span-6">
                 <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -305,9 +399,11 @@ export function ProjectSetupForm({ initialValues }: { initialValues: ProjectSetu
                   onBlur={formik.handleBlur}
                   placeholder="Contoh: 350"
                   autoComplete="off"
+                  aria-invalid={Boolean(formik.touched.guestCount && formik.errors.guestCount)}
+                  aria-describedby={formik.touched.guestCount && formik.errors.guestCount ? "guestCount-help guestCount-error" : "guestCount-help"}
                   data-lpignore="true"
                 />
-                <p className="form-help-text">Bisa diisi manual atau pilih angka cepat per 100 tamu.</p>
+                <p id="guestCount-help" className="form-help-text">Bisa diisi manual atau pilih angka cepat per 100 tamu.</p>
                 <div className="preset-chip-group">
                   {guestOptions.map((option) => (
                     <button
@@ -320,7 +416,7 @@ export function ProjectSetupForm({ initialValues }: { initialValues: ProjectSetu
                     </button>
                   ))}
                 </div>
-                {formik.touched.guestCount && formik.errors.guestCount ? <p className="neo-field-error">{formik.errors.guestCount}</p> : null}
+                {formik.touched.guestCount && formik.errors.guestCount ? <p id="guestCount-error" className="neo-field-error" role="alert">{formik.errors.guestCount}</p> : null}
               </div>
               <div className="form-field-stack project-stage-span-6">
                 <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -336,8 +432,8 @@ export function ProjectSetupForm({ initialValues }: { initialValues: ProjectSetu
             <SectionHeader icon={<Sparkles size={18} />} title="Konsep acara" description="Tuliskan gambaran singkat suasana dan arah acara agar tim perencanaannya lebih terarah." />
             <div className="mt-5 form-field-stack">
               <RequiredLabel htmlFor="concept">Gambaran singkat acara</RequiredLabel>
-              <textarea id="concept" name="concept" className="neo-input min-h-36 resize-none" value={formik.values.concept} onChange={formik.handleChange} onBlur={formik.handleBlur} placeholder="Ceritakan konsep acara secara singkat agar arah persiapan lebih jelas" autoComplete="off" data-lpignore="true" />
-              {formik.touched.concept && formik.errors.concept ? <p className="neo-field-error">{formik.errors.concept}</p> : null}
+              <textarea id="concept" name="concept" className="neo-input min-h-36 resize-none" value={formik.values.concept} onChange={formik.handleChange} onBlur={formik.handleBlur} placeholder="Ceritakan konsep acara secara singkat agar arah persiapan lebih jelas" autoComplete="off" aria-invalid={Boolean(formik.touched.concept && formik.errors.concept)} aria-describedby={formik.touched.concept && formik.errors.concept ? "concept-error" : undefined} data-lpignore="true" />
+              {formik.touched.concept && formik.errors.concept ? <p id="concept-error" className="neo-field-error" role="alert">{formik.errors.concept}</p> : null}
             </div>
           </section>
 

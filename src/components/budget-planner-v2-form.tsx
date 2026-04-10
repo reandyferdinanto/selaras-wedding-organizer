@@ -872,7 +872,7 @@ export function BudgetPlannerV2Form({
           </main>
 
           {/* Sidebar summary */}
-          <div className="self-start sticky top-6">
+          <div className="bv2-summary-wrap self-start">
             <SummaryPanel
               state={budgetState}
               coupleNames={coupleNames}
